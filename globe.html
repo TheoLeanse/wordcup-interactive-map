@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="http://d3js.org/d3.v3.min.js"></script>
+    <style>
+        circle {
+            fill: orange;
+            stroke: black;
+            stroke-width: 0.7;
+            opacity: 0.7;
+        }
+    </style>
+    <script type="text/javascript">  
+      function draw(geo_data) {
+        "use strict";
+        var margin = 75,
+            width = 1920 - margin,
+            height = 1080 - margin;
+
+        var svg = d3.select("body")
+            .append("svg")
+            .attr("width", width + margin)
+            .attr("height", height + margin)
+            .append('g')
+            .attr('class', 'map');
+
+        // projection returns x/y pixel values for inputted longitude/latitude coordinates
+        var projection = d3.geo.mercator()
+                               .scale(170)
+                               .translate([500, 500]);
+
+        // geo.path will render an SVG element to display the pixel values from our projection
+        var path = d3.geo.path().projection(projection); 
+
+        var map = svg.selectAll("path") // empty selection
+            .data(geo_data.features) // bind the .features array (country co-ordinates) from our GeoJSON data to empty selection - forming an array of placeholder elements
+            .enter() // enter selection selects all the paths of countries that are currently not on the page (ie all of them, in this case)        
+            .append("path")
+            .attr('d', path)
+            .style("fill", "LightBlue")
+            .style('stroke', 'black')
+            .style('stroke-width', 0.5);
+
+        function plot_points(data) {
+
+            function agg_year(leaves) {
+                // every element of leaves (which is an array of data objects representing each game for one year of the cup at a time, as provided by the .key bit) gets passed to this accessor callback as d, and d3 then adds up whatever we return from this callback before returning the value
+                var total = d3.sum(leaves, function(d) { 
+                    return d['attendance'];
+                });
+
+                var coords = leaves.map(function(d) {
+                    return projection([+d.long, +d.lat]);
+                });
+
+                var centre_x = d3.mean(coords, function(d) {
+                    return d[0]; // return first element of the x, y pair stored in coords
+                });
+
+                var centre_y = d3.mean(coords, function(d) {
+                    return d[1]; // return second element of the x, y pair stored in coords
+                });
+
+                var teams = d3.set() // initialise an empty set -- we can then interate through our teams for a given year, adding them one at a time. ps .set automatically de-duplicates
+
+                leaves.forEach(function(d) {
+                    teams.add(d['team1']);
+                    teams.add(d['team2']);
+                }) // after this, teams will represent a set of unique teams for a given year
+
+
+                // return final result of these transforms
+                return {
+                    'attendance' : total,
+                    'x' : centre_x,
+                    'y' : centre_y,
+                    'teams' : teams.values() //turns the set into an array
+                };
+            }
+            //draw circles logic
+            var nested = d3.nest() // d3 has great functionality for manipulating data -- here I'm using d3.nest() to do some data munging in the browser
+                           .key(function(d) {                  // performs a grouping by year - key function set to year
+                                return d['date'].getUTCFullYear();
+                           })
+                           .rollup(agg_year)// calls our aggregation function
+                           .entries(data); // passes our data through this nest pipeline (key and rollup)
+
+
+            var attendance_max = d3.max(nested, function(d) {
+                return d.values['attendance'];
+            }); // returns max values for attendence column
+
+            var radius = d3.scale.sqrt() //square root scale so as to scale by area rather than diameter -- otherwise the area of the different circles would be disproportiate to the data. could pass in logarithmic, linear scale, etc
+                           .domain([0, attendance_max])
+                           .range([0, 15]); 
+
+            function key_func(d) {
+                return d['key']; // in this case d['key'] is going to rperesent a sting corresponding to the year of the world cup
+            };
+
+            svg.append('g')
+               .attr("class", "bubble")
+               .selectAll("circle")
+               .data(nested.sort(function(a, b) {
+                  return b.values['attendance'] - a.values['attendance']; // sort by attendance so the smaller circle visible atop larger
+               }), key_func) // data join with a key function -- binding our data by year
+               .enter()
+               .append("circle")
+               .attr('cx', function(d) { return d.values['x']; })
+               .attr('cy', function(d) { return d.values['y']; })
+               .attr('r', function(d) { return radius(d.values['attendance']); })
+
+            // filter data for the given year passed to our update funtion using d3's built in filter() function, 
+            // then remove any elements from previous years' maps using .exit()
+            // then add any new elements on the page using .enter()
+            // also, we will only show the countries that are participating in the world cup in the given year
+            function update(year) { // takes a single year as an argument, and we filter our data with this year
+                
+                var filtered = nested.filter(function(d) { // we will be filtering our nested object
+                    return new Date(d['key']).getUTCFullYear() === year; // remember that nested object had its key property set to the year, so all we need to do is strip out the key and compare it to the year we want to filter by. Key is a string so we first convert the string to a date object, pull the year out with .getFullUTCYear(), and compare it to the year passed to our update function. filter function only return objects where this bit returns true (so when the game year === year)
+                });
+
+                var circles = svg.selectAll("circle")
+                                 .data(filtered, key_func);
+                
+                circles.exit().remove();
+
+                circles.enter()
+                       .append('circle')
+                       .attr('cx', function(d) { return d.values['x']; })
+                       .attr('cy', function(d) { return d.values['y']; })
+                       .attr('r', function(d) { return radius(d.values['attendance']); })
+            };
+
+          };
+
+        var format = d3.time.format("%d-%m-%Y (%H:%M h)");
+
+        d3.tsv("world_cup_geo.tsv", function(d) {
+          d['date'] = format.parse(d['date']);
+          d['attendance'] = +d['attendance'];
+          return d;
+        }, plot_points);
+
+            
+      };
+      </script>
+  </head>
+<body>
+  <script type="text/javascript">
+  /*
+    Use D3 to load the GeoJSON file
+    */
+    
+d3.json("world_countries.json", draw);
+  </script>
+</body>
+</html>
