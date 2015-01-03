@@ -13,7 +13,20 @@
 
         h2 {
           text-align: center;
-          font-family: arial;
+          font-family: palatino;
+        }
+
+        div.years_buttons {
+          position: fixed;
+          top: 5px;
+          left: 50px;
+        } 
+
+        div.years_buttons div {
+          background-color: rgb(251, 201, 127);
+          padding: 3px;
+          margin: 7px;
+          font-family: palatino;
         }
     </style>
     <script type="text/javascript">  
@@ -25,8 +38,7 @@
 
         d3.select("body")
           .append('h2')
-          .text("World Cup ")    
-
+          .text("World Cup ");    
 
         var svg = d3.select("body")
             .append("svg")
@@ -34,6 +46,16 @@
             .attr("height", height + margin)
             .append('g')
             .attr('class', 'map');
+
+        var years = [];
+
+        for (var i = 1930; i < 2015; i +=4) {
+                if(i !== 1942 && i !== 1946) { // world war two stopped World Cup
+                    years.push(i);
+                }
+        };
+
+        
 
         // projection returns x/y pixel values for inputted longitude/latitude coordinates
         var projection = d3.geo.mercator()
@@ -159,18 +181,12 @@
                 // go through every path, which corresponds to a country, for each path compare the name of that country to the teams in our countries array for a given year, and if it's present, keep that country light blue, else turn it white
                 svg.selectAll('path') // every path has GeoJSON bound to it, which will be our d variable. d is GeoJSON with properties defined on it, inside properties object it has a name
                    .transition()
-                   .duration(500)
+                   .duration(200)
                    .style('fill', update_countries)
                    .style('stroke', update_countries)
             };
 
-            var years = [];
-
-            for (var i = 1930; i < 2015; i +=4) {
-                if(i !== 1942 && i !== 1946) { // world war two stopped World Cup
-                    years.push(i);
-                }
-            };
+            
 
             var year_idx = 0;
 
@@ -181,9 +197,40 @@
 
                 if (year_idx >= years.length) { // if we've gone through every year in the years arrar
                     clearInterval(year_interval); // stops year_interval
+
+                    var buttons = d3.select("body") // create buttons. only introduce buttons after animation stops
+                        .append("div")
+                        .attr("class", "years_buttons")
+                        .selectAll("div")
+                        .data(years)
+                        .enter()
+                        .append("div")
+                        .text(function(d) {
+                            return d;
+                        });
+
+                    buttons.on("click", function(d) { // enable interaction on a click event
+                        d3.select(".years_buttons")// reset buttons
+                          .selectAll("div") // each individual button
+                          .transition()
+                          .duration(500)
+                          .style("color", "black")
+                          .style("background", "orange");
+
+                        d3.select(this) //accessing the html div element (button) that was clicked on
+                          .transition()
+                          .duration(500)
+                          .style("background", "lightBlue")
+                          .style("color", "white")
+
+                        update(d);
+                    })
                 } 
+
             }, 1000);
-            debugger;
+
+
+
           };
 
         var format = d3.time.format("%d-%m-%Y (%H:%M h)");
@@ -193,6 +240,7 @@
           d['attendance'] = +d['attendance'];
           return d;
         }, plot_points);
+
 
             
       };
