@@ -10,6 +10,11 @@
             stroke-width: 0.7;
             opacity: 0.7;
         }
+
+        h2 {
+          text-align: center;
+          font-family: arial;
+        }
     </style>
     <script type="text/javascript">  
       function draw(geo_data) {
@@ -17,6 +22,11 @@
         var margin = 75,
             width = 1920 - margin,
             height = 1080 - margin;
+
+        d3.select("body")
+          .append('h2')
+          .text("World Cup ")    
+
 
         var svg = d3.select("body")
             .append("svg")
@@ -116,23 +126,64 @@
             // then add any new elements on the page using .enter()
             // also, we will only show the countries that are participating in the world cup in the given year
             function update(year) { // takes a single year as an argument, and we filter our data with this year
-                
                 var filtered = nested.filter(function(d) { // we will be filtering our nested object
                     return new Date(d['key']).getUTCFullYear() === year; // remember that nested object had its key property set to the year, so all we need to do is strip out the key and compare it to the year we want to filter by. Key is a string so we first convert the string to a date object, pull the year out with .getFullUTCYear(), and compare it to the year passed to our update function. filter function only return objects where this bit returns true (so when the game year === year)
                 });
 
-                var circles = svg.selectAll("circle")
-                                 .data(filtered, key_func);
-                
-                circles.exit().remove();
+                d3.select("h2")
+                  .text("World Cup " + year);
 
+                var circles = svg.selectAll("circle")
+                                 .data(filtered, key_func); // update data bind
+                
+                circles.exit().remove(); // remove circles
+                
                 circles.enter()
                        .append('circle')
+                       .transition()
+                       .duration(500)
                        .attr('cx', function(d) { return d.values['x']; })
                        .attr('cy', function(d) { return d.values['y']; })
-                       .attr('r', function(d) { return radius(d.values['attendance']); })
+                       .attr('r', function(d) { return radius(d.values['attendance']); }) // add any new circles
+                
+                var countries = filtered[0].values['teams']; // a list of the countries that participated for a year given to nested / agg_year functions
+                
+                function update_countries(d) {
+                    if(countries.indexOf(d.properties.name) !== -1) { // indexOf method is common to all JS arrays -- if its argument is comtained in the array, method returns the index in which it is present, or if it is not contained in the array it returns -1
+                          return "lightBlue";
+                      } else {
+                          return "white";
+                      }
+                }; // filter countries
+                
+                // go through every path, which corresponds to a country, for each path compare the name of that country to the teams in our countries array for a given year, and if it's present, keep that country light blue, else turn it white
+                svg.selectAll('path') // every path has GeoJSON bound to it, which will be our d variable. d is GeoJSON with properties defined on it, inside properties object it has a name
+                   .transition()
+                   .duration(500)
+                   .style('fill', update_countries)
+                   .style('stroke', update_countries)
             };
 
+            var years = [];
+
+            for (var i = 1930; i < 2015; i +=4) {
+                if(i !== 1942 && i !== 1946) { // world war two stopped World Cup
+                    years.push(i);
+                }
+            };
+
+            var year_idx = 0;
+
+            var year_interval = setInterval(function() {
+                update(years[year_idx]);
+
+                year_idx++;
+
+                if (year_idx >= years.length) { // if we've gone through every year in the years arrar
+                    clearInterval(year_interval); // stops year_interval
+                } 
+            }, 1000);
+            debugger;
           };
 
         var format = d3.time.format("%d-%m-%Y (%H:%M h)");
